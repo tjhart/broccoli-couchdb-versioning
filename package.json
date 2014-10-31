@@ -1,0 +1,20 @@
+{
+  "name": "broccoli-couchdb-versioning",
+  "version": "0.1.0",
+  "description": "Define couchdb design documents on the file system, and automatically push them to couchdb when they change",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "broccoli",
+    "couchdb"
+  ],
+  "author": "Tim Hart",
+  "license": "MIT",
+  "dependencies": {
+    "broccoli": "^0.13.2",
+    "broccoli-writer": "^0.1.1",
+    "nano": "^5.12.0"
+  }
+}

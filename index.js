@@ -186,7 +186,7 @@ CouchDBVersioning.prototype.writeDir = function (filePath, json) {
   });
 };
 
-var JS_PATH = new RegExp(path.sep + '(map)|(reduce)$');
+var JS_PATH = new RegExp(path.sep + '((map)|(reduce))$');
 CouchDBVersioning.prototype.writeFile = function (filePath, data) {
   return new RSVP.Promise(function (resolve, reject) {
     var extension = JS_PATH.test(filePath) ? '.js' : '.txt';

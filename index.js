@@ -56,51 +56,53 @@ function readFiles(dir, files) {
 
 CouchDBVersioning.prototype.updateDesign = function (name, design) {
   var self = this;
-  var designName = '_design/' + name;
   return new RSVP.Promise(function (resolve, reject) {
+    var designName = '_design/' + name;
+    var existing = self.existingDesigns[name];
 
-    function insert() {
+    design._rev = existing._rev;
+    design._id = existing._id;
+    if (!lodash.isEqual(design, existing)) {
       self.connection.insert(design, designName, function (err, body) {
         if (err)reject(err);
         else resolve();
       });
+    } else {
+      resolve();
     }
-
-    self.connection.get(designName, function (err, body) {
-      if (err) {
-        if (err.status_code === 404) insert();
-        else reject(err);
-      }
-      else {
-        design._rev = body._rev;
-        design._id = body._id;
-        if (!lodash.isEqual(design, body)) {
-          insert();
-        } else {
-          resolve();
-        }
-      }
-    });
   });
 };
 
 CouchDBVersioning.prototype.updateDoc = function (doc) {
   var self = this, designs = doc.design;
-  /*
-   TODO:TJH improve performance by querying _all_docs for _design...
-
-   http://localhost:5984/test/_all_docs?startkey="_design"&endkey="_design0"
-
-   */
   return RSVP.all(Object.keys(designs).map(function (key) {
     return self.updateDesign(key, designs[key]);
   }));
+};
+
+CouchDBVersioning.prototype.getExistingDesigns = function () {
+  var self = this;
+  return new RSVP.Promise(function (resolve, reject) {
+    self.connection.get('_all_docs', {startkey: '_design', endkey: '_design0', include_docs: true}, function (err, body) {
+      var existing = {};
+      if (err) reject(err);
+      else {
+        body.rows.forEach(function (row) {
+          existing[row.id.split('/')[1]] = row.doc
+        });
+        resolve(existing);
+      }
+    });
+  });
 };
 
 CouchDBVersioning.prototype.updateDocuments = function (docs) {
   var self = this;
   return this.couchConnectionPromise
     .then(function () {
+      return self.getExistingDesigns();
+    }).then(function (existing) {
+      self.existingDesigns = existing;
       return RSVP.all(docs.map(function (doc) {
         return self.updateDoc(doc);
       }));

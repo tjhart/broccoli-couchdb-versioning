@@ -7,6 +7,20 @@ var Tree2Json = require('broccoli-tree-to-json'),
   nano = require('nano'),
   lodash = require('lodash');
 
+/**
+ *
+ * Synchronize CouchDB design documents.
+ * Options include
+ *  * `url`: the couchdb url (http://host:123/db)
+ *  * `username`: optional. used to authenticate with couchdb
+ *  * `password`: required if username is present.
+ *
+ * @param inputTree {string|tree} the input tree to monitor
+ * @param options {Object} couchdb connection options
+ * @return {CouchDBVersioning}
+ * @constructor
+ * @alias module:index
+ */
 function CouchDBVersioning(inputTree, options) {
   if (!(this instanceof CouchDBVersioning)) return new CouchDBVersioning(inputTree, options);
 
@@ -60,7 +74,6 @@ CouchDBVersioning.prototype.updateDesign = function (name, design) {
     var designName = '_design/' + name;
     var existing = self.existingDesigns[name];
 
-    design._rev = existing._rev;
     design._id = existing._id;
     if (!lodash.isEqual(design, existing)) {
       self.connection.insert(design, designName, function (err, body) {

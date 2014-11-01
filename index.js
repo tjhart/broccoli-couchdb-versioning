@@ -46,7 +46,7 @@ function CouchDBVersioning(inputTree, options) {
   });
 
   this.tempDirPromise = new RSVP.Promise(function (resolve, reject) {
-    mktemp.createDir('XXXXXXXX.tmp', function (err, path) {
+    mktemp.createDir(process.env.TMP_DIR + '/XXXXXXXX.tmp', function (err, path) {
       if (err) reject(err);
       else {
         resolve(path);

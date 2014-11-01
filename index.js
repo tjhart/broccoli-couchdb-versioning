@@ -32,12 +32,14 @@ function CouchDBVersioning(inputTree, options) {
   this.initPromise = new RSVP.Promise(function (resolve, reject) {
     if (options.initDesign) {
       fs.lstat(inputTree + '/_design', function (err, stat) {
-        if (err && 34 === err.errno) {
-          mkdirp(process.env.PWD + '/' + inputTree + '/_design', function (err, made) {
-            resolve(self.initExistingDesigns());
-          });
-        } else {
-          resolve(self.initExistingDesigns());
+        if (err) {
+          if (34 === err.errno) {
+            mkdirp(process.env.PWD + '/' + inputTree + '/_design', function (err, made) {
+              resolve(self.initExistingDesigns());
+            });
+          } else {
+            reject(err);
+          }
         }
       });
     } else resolve();

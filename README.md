@@ -13,7 +13,7 @@ npm install --save broccoli-couchdb-versioning
 
 ```javascript
 //Brocfile.js
-var couchDBVersioning = require('broccoli-couchdb-versioning);
+var couchDBVersioning = require('broccoli-couchdb-versioning');
 
 module.exports = couchdBVersioning('couchdb', {
   url:http://localhost:5984/db

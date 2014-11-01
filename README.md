@@ -22,7 +22,7 @@ module.exports = couchdBVersioning('couchdb', {
   initDesign:true
 });
 ```
-* "couchdb" is the path to where your couchdb assets are, or should be stored
+* `couchdb` is the path to where your couchdb assets are, or should be stored
 * `url` is the url to your database
 * username is an admin usename with view read and update rights
 * password is their password
@@ -34,8 +34,11 @@ Once you have captured your CouchDB Design documents, you can keep `broccoli ser
 a development session. Once you update a file, it's associated design document will get updated automatically 
 
 # Things to consider
-* Modifying _rev.txt or _id.txt is silly. Don't do it.
 * Synchronization is only one way for now - from the file system to the server.
+* broccoli-couchdb-versioning will refuse to update a document if the server revision is greater than the last
+recorded revision. If this happens, double check with your source control or someone else in your team. 
+broccoli-couchdb-versioning will continue to work for other documents, and also continue to nag that this document is
+out of date.
 
 ## Contribute
 
@@ -44,8 +47,6 @@ Check out
 
 ## TODO
 
-* Change behavior when run in production. Document revisions get out of sync
-between environments, so force a prod update
 * Determine when a document has been deleted, and remove it from the other store
 * Synchronize other documents too, not just design documents
 * Implement full two way synchronization and conflict management

@@ -150,7 +150,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
            will outpace production revs, so we're allowing updates when local
            revs are equal or greater
            */
-          if (serverRevNum <= localRevNum) {
+          if (localRevNum >= serverRevNum) {
             //fake out the rev for the equality test and update
             designDoc._rev = existing._rev;
             if (!lodash.isEqual(designDoc, existing)) {

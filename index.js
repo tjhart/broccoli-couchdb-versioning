@@ -4,12 +4,12 @@ var Tree2Json = require('broccoli-tree-to-json'),
   RSVP = require('rsvp'),
   path = require('path'),
   fs = require('fs'),
-  nano = require('nano');
+  nano = require('nano'),
+  lodash = require('lodash');
 
 function CouchDBVersioning(inputTree, options) {
   if (!(this instanceof CouchDBVersioning)) return new CouchDBVersioning(inputTree, options);
 
-  console.log('init');
   var self = this;
   this.inputTree = new Tree2Json(inputTree);
   this.couchConnectionPromise = new RSVP.Promise(function (resolve, reject) {
@@ -19,7 +19,6 @@ function CouchDBVersioning(inputTree, options) {
       connection.auth(options.username, options.password, function (err, body, headers) {
         if (err) reject(err);
         else {
-          console.log('resolving connection');
           self.connection = nano({url: options.url, cookie: headers['set-cookie'][0]});
           resolve();
         }
@@ -74,7 +73,12 @@ CouchDBVersioning.prototype.updateDesign = function (name, design) {
       }
       else {
         design._rev = body._rev;
-        insert();
+        design._id = body._id;
+        if (!lodash.isEqual(design, body)) {
+          insert();
+        } else {
+          resolve();
+        }
       }
     });
   });
@@ -82,6 +86,12 @@ CouchDBVersioning.prototype.updateDesign = function (name, design) {
 
 CouchDBVersioning.prototype.updateDoc = function (doc) {
   var self = this, designs = doc.design;
+  /*
+   TODO:TJH improve performance by querying _all_docs for _design...
+
+   http://localhost:5984/test/_all_docs?startkey="_design"&endkey="_design0"
+
+   */
   return RSVP.all(Object.keys(designs).map(function (key) {
     return self.updateDesign(key, designs[key]);
   }));
@@ -109,11 +119,9 @@ CouchDBVersioning.prototype.updateCouch = function (destDir) {
 
 CouchDBVersioning.prototype.read = function (readTree) {
   var self = this, destDir;
-  console.log('read');
   return readTree(this.inputTree)
     .then(function (pDestDir) {
       destDir = pDestDir;
-      console.log('going to update couch');
       return self.updateCouch(destDir);
     }).then(function () {
       return destDir;

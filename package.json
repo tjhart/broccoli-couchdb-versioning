@@ -19,6 +19,7 @@
   "dependencies": {
     "broccoli-tree-to-json": "git+https://github.com/tjhart/broccoli-tree-to-json.git",
     "lodash": "^2.4.1",
+    "mktemp": "^0.3.5",
     "nano": "^5.12.0",
     "rsvp": "^3.0.14"
   },

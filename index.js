@@ -29,14 +29,17 @@ function CouchDBVersioning(inputTree, options) {
 
   this.srcDir = inputTree;
   this.revDir = inputTree + '/.rev';
+  this.options = options;
   this.inputTree = new Tree2Json(inputTree + '/_design');
 
-  this.initPromise = this.init(options);
+  this.initPromise = this.init(options)
+    .catch(function (err) {
+      console.trace('CouchDB Init ERROR:', new Date(), err);
+    });
 }
 
 CouchDBVersioning.prototype.init = function (options) {
   return RSVP.all([this.initDesign(options),
-    this.initConnection(options),
     this.initTmpDir(),
     this.initRevCache()])
     .catch(function (err) {
@@ -65,25 +68,24 @@ CouchDBVersioning.prototype.initDesign = function (options) {
   });
 };
 
-CouchDBVersioning.prototype.initConnection = function (options) {
+CouchDBVersioning.prototype.initConnection = function () {
   var self = this;
-  this.connectionPromise = new RSVP.Promise(function (resolve, reject) {
-    var connection = nano(options.url);
+  return new RSVP.Promise(function (resolve, reject) {
+    var connection = nano(self.options.url);
 
-    if (options.username) {
-      connection.auth(options.username, options.password, function (err, body, headers) {
+    if (self.options.username) {
+      connection.auth(self.options.username, self.options.password, function (err, body, headers) {
         if (err) reject(err);
         else {
-          self.connection = nano({url: options.url, cookie: headers['set-cookie'][0]});
+          self.connection = nano({url: self.options.url, cookie: headers['set-cookie'][0]});
           resolve();
         }
       });
     } else {
       self.connection = connection;
-      resolve();
+      resolve(connection);
     }
   });
-  return  this.connectionPromise;
 };
 
 CouchDBVersioning.prototype.initTmpDir = function () {
@@ -146,9 +148,10 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
           var serverRevNum = parseInt(existing._rev.split('-')[0]), localRevNum = parseInt(rev.split('-')[0]);
 
           /*
-           NOTE - making some assumptions here. Generally development revs
-           will outpace production revs, so we're allowing updates when local
-           revs are equal or greater
+             NOTE - Messing with _revs is a really bad idea.
+             But as a development tool this is a special use case.
+             Generally development revs will outpace production revs, so we're allowing updates
+             when local revs are equal or greater
            */
           if (localRevNum >= serverRevNum) {
             //fake out the rev for the equality test and update
@@ -195,21 +198,18 @@ CouchDBVersioning.prototype.updateRev = function (key, rev) {
 
 CouchDBVersioning.prototype.getExistingDesigns = function () {
   var self = this;
-  return this.connectionPromise
-    .then(function () {
-      return new RSVP.Promise(function (resolve, reject) {
-        self.connection.get('_all_docs', {startkey: '_design', endkey: '_design0', include_docs: true}, function (err, body) {
-          var existing = {};
-          if (err) reject(err);
-          else {
-            body.rows.forEach(function (row) {
-              existing[row.id.split('/')[1]] = row.doc
-            });
-            resolve(existing);
-          }
+  return new RSVP.Promise(function (resolve, reject) {
+    self.connection.get('_all_docs', {startkey: '_design', endkey: '_design0', include_docs: true}, function (err, body) {
+      var existing = {};
+      if (err) reject(err);
+      else {
+        body.rows.forEach(function (row) {
+          existing[row.id.split('/')[1]] = row.doc
         });
-      });
+        resolve(existing);
+      }
     });
+  });
 };
 
 CouchDBVersioning.prototype.updateDocument = function (destDir, fileName) {
@@ -237,15 +237,16 @@ CouchDBVersioning.prototype.updateCouch = function (destDir) {
 
 CouchDBVersioning.prototype.read = function (readTree) {
   var self = this;
-  return this.initPromise
+  return RSVP.all([this.initPromise, this.initConnection()])
     .then(function () {
       return readTree(self.inputTree)
-    }).then(function (pDestDir) {
-      return self.updateCouch(pDestDir);
+    }).then(function (destDir) {
+      return self.updateCouch(destDir);
     }).then(function () {
       return self.tempDir;
-    }).catch(function(err){
+    }).catch(function (err) {
       console.trace('CouchDBVersioning: ERROR:', new Date(), err);
+      return self.tempDir;
     });
 };
 
@@ -295,12 +296,14 @@ CouchDBVersioning.prototype.writeFile = function (filePath, data) {
 
 CouchDBVersioning.prototype.initExistingDesigns = function () {
   var self = this;
-  return this.getExistingDesigns()
-    .then(function (existing) {
+  return this.initConnection()
+    .then(function () {
+      return self.getExistingDesigns();
+    }).then(function (existing) {
       return RSVP.all(Object.keys(existing).map(function (designName) {
         return self.writeDir(path.join(self.srcDir, '_design', designName), existing[designName]);
       }));
-    }).catch(function(err){
+    }).catch(function (err) {
       console.trace('CouchDBVersionin: ERROR:', new Date(), err);
     });
 };

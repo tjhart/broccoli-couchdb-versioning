@@ -35,6 +35,7 @@ a development session. Once you update a file, it's associated design document w
 
 # Things to consider
 * Modifying _rev.txt or _id.txt is silly. Don't do it.
+* Synchronization is only one way for now - from the file system to the server.
 
 ## Contribute
 
@@ -43,9 +44,11 @@ Check out
 
 ## TODO
 
-* synchronize other documents too, not just design documents
-* manage synchronization better. It works fine for one developer now, but it will
-* break fairly frequently for a team.
+* Change behavior when run in production. Document revisions get out of sync
+between environments, so force a prod update
+* Determine when a document has been deleted, and remove it from the other store
+* Synchronize other documents too, not just design documents
+* Implement full two way synchronization and conflict management
 
 ## License
 

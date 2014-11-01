@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Define couchdb design documents on the file system, and automatically push them to couchdb when they change",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tjhart/broccoli-couchdb-versioning.git"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -13,8 +17,11 @@
   "author": "Tim Hart",
   "license": "MIT",
   "dependencies": {
-    "broccoli": "^0.13.2",
-    "broccoli-writer": "^0.1.1",
-    "nano": "^5.12.0"
+    "broccoli-tree-to-json": "git+https://github.com/tjhart/broccoli-tree-to-json.git",
+    "nano": "^5.12.0",
+    "rsvp": "^3.0.14"
+  },
+  "devDependencies": {
+    "broccoli": "^0.13.2"
   }
 }

@@ -51,18 +51,9 @@ CouchDBVersioning.prototype.initDesign = function (options) {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
     if (options.initDesign) {
-      fs.lstat(self.srcDir + '/_design', function (err, stat) {
-        if (err) {
-          if (34 === err.errno) {
-            mkdirp(process.env.PWD + '/' + self.srcDir + '/_design', function (err, made) {
-              resolve(self.initExistingDesigns());
-            });
-          } else {
-            reject(err);
-          }
-        } else {
-          resolve(self.initExistingDesigns());
-        }
+      mkdirp(path.join(self.srcDir, '_design'), function (err, made) {
+        if (err) reject(err);
+        else resolve(self.initExistingDesigns());
       });
     } else resolve();
   });
@@ -148,10 +139,10 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
           var serverRevNum = parseInt(existing._rev.split('-')[0]), localRevNum = parseInt(rev.split('-')[0]);
 
           /*
-             NOTE - Messing with _revs is a really bad idea.
-             But as a development tool this is a special use case.
-             Generally development revs will outpace production revs, so we're allowing updates
-             when local revs are equal or greater
+           NOTE - Messing with _revs is a really bad idea.
+           But as a development tool this is a special case.
+           Generally development revs will outpace production revs, so we're allowing
+           updates when local revs are equal or greater
            */
           if (localRevNum >= serverRevNum) {
             //fake out the rev for the equality test and update
@@ -199,16 +190,17 @@ CouchDBVersioning.prototype.updateRev = function (key, rev) {
 CouchDBVersioning.prototype.getExistingDesigns = function () {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    self.connection.get('_all_docs', {startkey: '_design', endkey: '_design0', include_docs: true}, function (err, body) {
-      var existing = {};
-      if (err) reject(err);
-      else {
-        body.rows.forEach(function (row) {
-          existing[row.id.split('/')[1]] = row.doc
-        });
-        resolve(existing);
-      }
-    });
+    self.connection.get('_all_docs', {startkey: '_design', endkey: '_design0', include_docs: true},
+      function (err, body) {
+        var existing = {};
+        if (err) reject(err);
+        else {
+          body.rows.forEach(function (row) {
+            existing[row.id.split('/')[1]] = row.doc
+          });
+          resolve(existing);
+        }
+      });
   });
 };
 
@@ -237,11 +229,11 @@ CouchDBVersioning.prototype.updateCouch = function (destDir) {
 
 CouchDBVersioning.prototype.read = function (readTree) {
   var self = this;
-  return RSVP.all([this.initPromise, this.initConnection()])
+  return this.initPromise
     .then(function () {
-      return readTree(self.inputTree)
-    }).then(function (destDir) {
-      return self.updateCouch(destDir);
+      return RSVP.all([self.initConnection(), readTree(self.inputTree)]);
+    }).then(function (resolutions) {
+      return self.updateCouch(resolutions[1]);
     }).then(function () {
       return self.tempDir;
     }).catch(function (err) {
@@ -259,17 +251,21 @@ CouchDBVersioning.prototype.writeDir = function (filePath, json) {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
     mkdirp(filePath, function (err, made) {
+      var promises;
       if (err) reject(err);
       else {
-        Object.keys(json).forEach(function (key) {
+        promises = Object.keys(json).map(function (key) {
           var val = json[key];
           var subPath = path.join(filePath, key);
+          var result;
           if (val instanceof Array || typeof val !== 'object') {
-            resolve(self.writeFile(subPath, val));
+            result = self.writeFile(subPath, val);
           } else {
-            resolve(self.writeDir(subPath, val));
+            result = self.writeDir(subPath, val);
           }
+          return result;
         });
+        resolve(RSVP.all(promises));
       }
     });
   });

@@ -34,7 +34,9 @@ Once you have captured your CouchDB Design documents, you can keep `broccoli ser
 a development session. Once you update a file, it's associated design document will get updated automatically 
 
 # Things to consider
-* Synchronization is only one way for now - from the file system to the server.
+* Synchronization is only one way - from the file system to the server. This tool assumes
+that the file system is always the expert. 
+* Deleting a doc locally will not reflect to the server. Inserts and updates will work
 * broccoli-couchdb-versioning will refuse to update a document if the server revision is greater than the last
 recorded revision. If this happens, double check with your source control or someone else in your team. 
 broccoli-couchdb-versioning will continue to work for other documents, and also continue to nag that this document is
@@ -49,7 +51,6 @@ Check out
 
 * Determine when a document has been deleted, and remove it from the other store
 * Synchronize other documents too, not just design documents
-* Implement full two way synchronization and conflict management
 
 ## License
 

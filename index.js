@@ -133,13 +133,17 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
     return new RSVP.Promise(function (resolve, reject) {
       var designDoc = design[key];
       var designName = '_design/' + key;
-      var existing = existingDesigns[key];
+      var existing = existingDesigns[key] || {_id: designName};
       designDoc._id = existing._id;
 
-      var checkRevPromise = self.getRev(key)
+      return self.getRev(key)
         .then(function (rev) {
           var docName;
-          var serverRevNum = parseInt(existing._rev.split('-')[0]), localRevNum = parseInt(rev.split('-')[0]);
+          var serverRevNum = 0, localRevNum;
+          if (existing._rev) {
+            serverRevNum = parseInt(existing._rev.split('-')[0]);
+          }
+          localRevNum = parseInt(rev.split('-')[0]);
 
           /*
            NOTE - Messing with _revs is a really bad idea.
@@ -151,12 +155,16 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
             //fake out the rev for the equality test and update
             designDoc._rev = existing._rev;
             if (!lodash.isEqual(designDoc, existing)) {
-              self.connection.insert(designDoc, designName, function (err, body) {
-                if (err)reject(err);
-                else {
-                  return self.updateRev(key, body.rev);
-                }
-              });
+              return new RSVP.Promise(function (resolve, reject) {
+                self.connection.insert(designDoc, designName, function (err, body) {
+                  if (err)reject(err);
+                  else {
+                    resolve(self.updateRev(key, body.rev));
+                  }
+                });
+              }).catch(function (err) {
+                  reject(err);
+                });
             }
           } else {
             docName = '_design/' + key;
@@ -165,7 +173,6 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
             setInterval(reportError, 10000, docName, new Date(), rev, existing._rev, true);
           }
         });
-      resolve(checkRevPromise);
     });
   }));
 };

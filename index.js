@@ -127,6 +127,13 @@ function reportError(docName, date, localRev, serverRev, nag) {
   console.log(nag ? 'NAG:' : 'ERROR:', date, docName + '._rev Conflict: local is', localRev, 'server is', serverRev);
 }
 
+/**
+ * REDTAG:TJH
+ * This code needs to be cleaned up
+ * @param existingDesigns
+ * @param design
+ * @return {*}
+ */
 CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
   var self = this;
   return RSVP.all(Object.keys(design).map(function (key) {
@@ -169,6 +176,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
           } else {
             docName = '_design/' + key;
             reportError(docName, new Date(), rev, existing._rev);
+            resolve();
           }
         });
     });

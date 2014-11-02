@@ -137,49 +137,44 @@ function reportError(docName, date, localRev, serverRev, nag) {
 CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
   var self = this;
   return RSVP.all(Object.keys(design).map(function (key) {
-    return new RSVP.Promise(function (resolve, reject) {
-      var designDoc = design[key];
-      var designName = '_design/' + key;
-      var existing = existingDesigns[key] || {_id: designName};
-      designDoc._id = existing._id;
+    var designDoc = design[key];
+    var designName = '_design/' + key;
+    var existing = existingDesigns[key] || {_id: designName};
+    designDoc._id = existing._id;
 
-      return self.getRev(key)
-        .then(function (rev) {
-          var docName;
-          var serverRevNum = 0, localRevNum;
-          if (existing._rev) {
-            serverRevNum = parseInt(existing._rev.split('-')[0]);
-          }
-          localRevNum = parseInt(rev.split('-')[0]);
+    return self.getRev(key)
+      .then(function (rev) {
+        var docName;
+        var serverRevNum = 0, localRevNum;
+        if (existing._rev) {
+          serverRevNum = parseInt(existing._rev.split('-')[0]);
+        }
+        localRevNum = parseInt(rev.split('-')[0]);
 
-          /*
-           NOTE - Messing with _revs is a really bad idea.
-           But as a development tool this is a special case.
-           Generally development revs will outpace production revs, so we're allowing
-           updates when local revs are equal or greater
-           */
-          if (localRevNum >= serverRevNum) {
-            //fake out the rev for the equality test and update
-            designDoc._rev = existing._rev;
-            if (!lodash.isEqual(designDoc, existing)) {
-              return new RSVP.Promise(function (resolve, reject) {
-                self.connection.insert(designDoc, designName, function (err, body) {
-                  if (err)reject(err);
-                  else {
-                    resolve(self.updateRev(key, body.rev));
-                  }
-                });
-              }).catch(function (err) {
-                  reject(err);
-                });
-            }
-          } else {
-            docName = '_design/' + key;
-            reportError(docName, new Date(), rev, existing._rev);
-            resolve();
+        /*
+         NOTE - Messing with _revs is a really bad idea.
+         But as a development tool this is a special case.
+         Generally development revs will outpace production revs, so we're allowing
+         updates when local revs are equal or greater
+         */
+        if (localRevNum >= serverRevNum) {
+          //fake out the rev for the equality test and update
+          designDoc._rev = existing._rev;
+          if (!lodash.isEqual(designDoc, existing)) {
+            return new RSVP.Promise(function (resolve, reject) {
+              self.connection.insert(designDoc, designName, function (err, body) {
+                if (err)reject(err);
+                else {
+                  resolve(self.updateRev(key, body.rev));
+                }
+              });
+            });
           }
-        });
-    });
+        } else {
+          docName = '_design/' + key;
+          reportError(docName, new Date(), rev, existing._rev);
+        }
+      });
   }));
 };
 

@@ -79,7 +79,8 @@
 
   // Custom Globals
   "globals"       : {
-    "describe":false
+    "describe":false,
+    "emit":false
   },       // additional predefined global variables
 
   // Suppress specific warnings

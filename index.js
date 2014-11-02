@@ -82,19 +82,16 @@ CouchDBVersioning.prototype.initConnection = function () {
 CouchDBVersioning.prototype.initTmpDir = function () {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    var baseDir;
-    if (fs.statSync('tmp').isDirectory()) {
-      baseDir = fs.realpathSync('tmp');
-      mktemp.createDir(path.join(baseDir, 'XXXXXXXX.tmp'), function (err, path) {
-        if (err) reject(err);
-        else {
-          self.tempDir = fs.realpathSync(path);
-          resolve(path)
-        }
-      });
-    } else {
-      reject("I don't know how to find 'tmp'");
-    }
+    mktemp.createDir(path.join(process.env.TMPDIR, 'XXXXXXXX.tmp'), function (err, path) {
+      if (err) {
+        console.warn('CouchDBVersioning WARN:', new Date(), 'Could not create temp dir');
+        resolve();
+      }
+      else {
+        self.tempDir = path;
+        resolve(path)
+      }
+    });
   });
 };
 
@@ -256,7 +253,7 @@ CouchDBVersioning.prototype.cleanup = function () {
   this.inputTree.cleanup();
   //its not the end if the world if I can't clean up. And it happens on Heroku
   try {
-    fs.rmdirSync(this.tempDir);
+    if (this.tempDir) fs.rmdirSync(this.tempDir);
   } catch (e) {
     console.warn('CouchDBVersioning WARN:', new Date(), 'could not delete', this.tempDir, e);
   }

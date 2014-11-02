@@ -169,8 +169,6 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
           } else {
             docName = '_design/' + key;
             reportError(docName, new Date(), rev, existing._rev);
-            //nag
-            setInterval(reportError, 10000, docName, new Date(), rev, existing._rev, true);
           }
         });
     });

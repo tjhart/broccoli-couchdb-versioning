@@ -146,6 +146,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
       .then(function (rev) {
         var docName;
         var serverRevNum = 0, localRevNum;
+        var result = null;
         if (existing._rev) {
           serverRevNum = parseInt(existing._rev.split('-')[0]);
         }
@@ -161,19 +162,22 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
           //fake out the rev for the equality test and update
           designDoc._rev = existing._rev;
           if (!lodash.isEqual(designDoc, existing)) {
-            return new RSVP.Promise(function (resolve, reject) {
+            result = new RSVP.Promise(function (resolve, reject) {
               self.connection.insert(designDoc, designName, function (err, body) {
                 if (err)reject(err);
                 else {
-                  resolve(self.updateRev(key, body.rev));
+                  resolve(body.rev);
                 }
               });
-            });
+            }).then(function (newRev) {
+                return self.updateRev(key, newRev);
+              });
           }
         } else {
           docName = '_design/' + key;
           reportError(docName, new Date(), rev, existing._rev);
         }
+        return result;
       });
   }));
 };

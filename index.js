@@ -79,10 +79,12 @@ CouchDBVersioning.prototype.initConnection = function () {
   });
 };
 
+var HEROKU_TEMP = path.join(path.sep, 'app', 'tmp');
 CouchDBVersioning.prototype.initTmpDir = function () {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    mktemp.createDir(path.join((process.env.TMPDIR || 'tmp'), 'XXXXXXXX.tmp'), function (err, path) {
+    //REDTAG:TJH - HEROKU_TEMP is a hack. Needs to e fixed
+    mktemp.createDir(path.join((process.env.TMPDIR || HEROKU_TEMP), 'XXXXXXXX.tmp'), function (err, path) {
       if (err) {
         console.warn('CouchDBVersioning WARN:', new Date(), 'Could not create temp dir');
         resolve();

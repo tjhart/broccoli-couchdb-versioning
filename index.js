@@ -88,7 +88,7 @@ CouchDBVersioning.prototype.initTmpDir = function () {
       mktemp.createDir(path.join(baseDir, 'XXXXXXXX.tmp'), function (err, path) {
         if (err) reject(err);
         else {
-          self.tempDir = path;
+          self.tempDir = fs.realpathSync(path);
           resolve(path)
         }
       });
@@ -186,8 +186,12 @@ CouchDBVersioning.prototype.getRev = function (key) {
 CouchDBVersioning.prototype.updateRev = function (key, rev) {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    fs.writeFile(path.join(self.revDir, key + '.txt'), rev, function (err, data) {
-      if (err) reject();
+    var filePath = path.join(self.revDir, key + '.txt');
+    fs.writeFile(filePath, rev, function (err, data) {
+      if (err) {
+        //HEROKU deploys won't update the rev (read only dirs), so this shouldn't be fatal
+        console.warn('CouchDBVersioning WARN:', new Date(), 'could not update', filePath, '. :', err);
+      }
       else resolve();
     });
   });
@@ -250,7 +254,12 @@ CouchDBVersioning.prototype.read = function (readTree) {
 
 CouchDBVersioning.prototype.cleanup = function () {
   this.inputTree.cleanup();
-  fs.rmdirSync(this.tempDir);
+  //its not the end if the world if I can't clean up. And it happens on Heroku
+  try {
+    fs.rmdirSync(this.tempDir);
+  } catch (e) {
+    console.warn('CouchDBVersioning WARN:', new Date(), 'could not delete', this.tempDir, e);
+  }
 };
 
 CouchDBVersioning.prototype.writeDir = function (filePath, json) {

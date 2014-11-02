@@ -83,16 +83,18 @@ CouchDBVersioning.prototype.initTmpDir = function () {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
     var baseDir;
-    if(fs.statSync('tmp').isDirectory()){
+    if (fs.statSync('tmp').isDirectory()) {
       baseDir = fs.realpathSync('tmp');
+      mktemp.createDir(path.join(baseDir, 'XXXXXXXX.tmp'), function (err, path) {
+        if (err) reject(err);
+        else {
+          self.tempDir = path;
+          resolve(path)
+        }
+      });
+    } else {
+      reject("I don't know how to find 'tmp'");
     }
-    mktemp.createDir(path.join(baseDir, 'XXXXXXXX.tmp'), function (err, path) {
-      if (err) reject(err);
-      else {
-        self.tempDir = path;
-        resolve(path)
-      }
-    });
   });
 };
 

@@ -82,7 +82,11 @@ CouchDBVersioning.prototype.initConnection = function () {
 CouchDBVersioning.prototype.initTmpDir = function () {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    mktemp.createDir(path.join('tmp', 'XXXXXXXX.tmp'), function (err, path) {
+    var baseDir;
+    if(fs.statSync('tmp').isDirectory()){
+      baseDir = fs.realpathSync('tmp');
+    }
+    mktemp.createDir(path.join(baseDir, 'XXXXXXXX.tmp'), function (err, path) {
       if (err) reject(err);
       else {
         self.tempDir = path;

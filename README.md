@@ -51,6 +51,7 @@ Check out
 
 * Determine when a document has been deleted, and remove it from the other store
 * Synchronize other documents too, not just design documents
+* Improve versioning. We're not quite ready for prime time.
 
 ## License
 

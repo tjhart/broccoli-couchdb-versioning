@@ -18,7 +18,7 @@ var couchDBVersioning = require('broccoli-couchdb-versioning');
 module.exports = couchdBVersioning('couchdb', {
   url:'http://localhost:5984/db',
   username:admin_username,
-  password:admin_password //save to use process.env.COUCHDB_ADMIN_PASSWORD,
+  password:admin_password
   initDesign:true
 });
 ```

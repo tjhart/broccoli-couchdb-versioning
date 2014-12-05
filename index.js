@@ -28,7 +28,7 @@ function CouchDBVersioning(inputTree, options) {
   if (!(this instanceof CouchDBVersioning)) return new CouchDBVersioning(inputTree, options);
 
   this.srcDir = inputTree;
-  this.revDir = inputTree + '/.rev';
+  this.timestampDir = inputTree + '/.revTimestamps';
   this.options = options;
   this.inputTree = new Tree2Json(inputTree + '/_design');
 
@@ -40,8 +40,9 @@ function CouchDBVersioning(inputTree, options) {
 
 CouchDBVersioning.prototype.init = function (options) {
   return RSVP.all([this.initDesign(options),
-    this.initTmpDir(),
-    this.initRevCache()])
+    this.initTmpDir() ,
+    this.initTimestampCache()
+  ])
     .catch(function (err) {
       console.log('CouchDB Versioning initialization error:', err);
     });
@@ -95,10 +96,10 @@ CouchDBVersioning.prototype.initTmpDir = function () {
   });
 };
 
-CouchDBVersioning.prototype.initRevCache = function () {
+CouchDBVersioning.prototype.initTimestampCache = function () {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    mkdirp(self.revDir, function (err, made) {
+    mkdirp(self.timestampDir, function (err, made) {
       if (err) reject(err);
       else resolve();
     });
@@ -131,77 +132,75 @@ function reportError(docName, date, localRev, serverRev, nag) {
  * REDTAG:TJH
  * This code needs to be cleaned up
  * @param existingDesigns
- * @param design
+ * @param localDesigns
  * @return {*}
  */
-CouchDBVersioning.prototype.updateDesign = function (existingDesigns, design) {
-  var self = this;
-  return RSVP.all(Object.keys(design).map(function (key) {
-    var designDoc = design[key];
-    var designName = '_design/' + key;
-    var existing = existingDesigns[key] || {_id: designName};
+CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesigns) {
+  var self = this, updateTime = new Date().toISOString();
+  return RSVP.all(Object.keys(localDesigns).map(function (designKey) {
+    var designDoc = localDesigns[designKey], designName = '_design/' + designKey,
+      existing = existingDesigns[designKey] || {_id: designName}, existingRevTimestamp = existing.revTimestamp,
+      existingRev = existing._rev;
+
     designDoc._id = existing._id;
 
-    return self.getRev(key)
-      .then(function (rev) {
-        var docName;
-        var serverRevNum = 0, localRevNum;
-        var result = null;
-        if (existing._rev) {
-          serverRevNum = parseInt(existing._rev.split('-')[0]);
-        }
-        localRevNum = parseInt(rev.split('-')[0]);
+    delete existing.revTimestamp;
+    delete existing._rev;
+    delete designDoc._rev;
 
-        /*
-         NOTE - Messing with _revs is a really bad idea.
-         But as a development tool this is a special case.
-         Generally development revs will outpace production revs, so we're allowing
-         updates when local revs are equal or greater
-         */
-        if (localRevNum >= serverRevNum) {
-          //fake out the rev for the equality test and update
-          designDoc._rev = existing._rev;
-          if (!lodash.isEqual(designDoc, existing)) {
+    if (!(existingRevTimestamp && lodash.isEqual(designDoc, existing))) {
+      existing.revTimestamp = existingRevTimestamp;
+      existing._rev = existingRev;
+      return self.getRevTimestamp(designKey)
+        .then(function (revTimestamp) {
+          var docName, result = null;
+
+          revTimestamp = revTimestamp || updateTime;
+          designDoc.revTimestamp = revTimestamp;
+
+          if (!existingRevTimestamp || revTimestamp >= existingRevTimestamp) {
             result = new RSVP.Promise(function (resolve, reject) {
+              designDoc.revTimestamp = updateTime;
+              designDoc._rev = existing._rev;
               self.connection.insert(designDoc, designName, function (err, body) {
                 if (err)reject(err);
                 else {
-                  resolve(body.rev);
+                  resolve();
                 }
               });
-            }).then(function (newRev) {
-                return self.updateRev(key, newRev);
+            }).then(function () {
+                self.updateRevTimestamp(designKey, updateTime);
               });
+          } else {
+            docName = '_design/' + designKey;
+            reportError(docName, new Date(), revTimestamp, existingRevTimestamp);
           }
-        } else {
-          docName = '_design/' + key;
-          reportError(docName, new Date(), rev, existing._rev);
-        }
-        return result;
-      });
+          return result;
+        });
+    }
   }));
 };
 
-CouchDBVersioning.prototype.getRev = function (key) {
+CouchDBVersioning.prototype.getRevTimestamp = function (key) {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    fs.readFile(path.join(self.revDir, key + '.txt'), function (err, data) {
+    fs.readFile(path.join(self.timestampDir, key + '.txt'), function (err, data) {
       if (err) reject(err);
       else resolve(data.toString());
     });
   });
 };
 
-CouchDBVersioning.prototype.updateRev = function (key, rev) {
+CouchDBVersioning.prototype.updateRevTimestamp = function (key, rev) {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    var filePath = path.join(self.revDir, key + '.txt');
+    var filePath = path.join(self.timestampDir, key + '.txt');
     fs.writeFile(filePath, rev, function (err, data) {
       if (err) {
-        //HEROKU deploys won't update the rev (read only dirs), so this shouldn't be fatal
+        //NOTE:TJH Some deploys won't update the timestamp (read only dirs), so this shouldn't be fatal
         console.warn('CouchDBVersioning WARN:', new Date(), 'could not update', filePath, '. :', err);
       }
-      else resolve();
+      resolve();
     });
   });
 };
@@ -255,9 +254,9 @@ CouchDBVersioning.prototype.read = function (readTree) {
   var self = this;
   return this.initPromise
     .then(function () {
-      return RSVP.all([self.initConnection(), readTree(self.inputTree)]);
-    }).then(function (resolutions) {
-      return self.updateCouch(resolutions[1]);
+      return RSVP.hash({connection: self.initConnection(), docs: readTree(self.inputTree)});
+    }).then(function (hash) {
+      return self.updateCouch(hash.docs);
     }).then(function () {
       return self.tempDir;
     }).catch(function (err) {
@@ -296,14 +295,14 @@ CouchDBVersioning.prototype.writeDir = function (filePath, json) {
 };
 
 var JS_PATH = new RegExp(path.sep + '((map)|(reduce))$');
-var SPECIAL_VALUES = new RegExp(path.sep + '_rev$');
+var SPECIAL_VALUES = new RegExp(path.sep + 'revTimestamp$');
 var IGNORED_VALUES = new RegExp(path.sep + '_id$');
 CouchDBVersioning.prototype.writeFile = function (filePath, data) {
   var elems;
   if (IGNORED_VALUES.test(filePath)) return false;
   if (SPECIAL_VALUES.test(filePath)) {
     elems = filePath.split(path.sep);
-    return this.updateRev(elems[elems.length - 2], data)
+    return this.updateRevTimestamp(elems[elems.length - 2], data)
   }
   return new RSVP.Promise(function (resolve, reject) {
     var extension = JS_PATH.test(filePath) ? '.js' : '.txt';
@@ -321,10 +320,12 @@ CouchDBVersioning.prototype.initExistingDesigns = function () {
       return self.getExistingDesigns();
     }).then(function (existing) {
       return RSVP.all(Object.keys(existing).map(function (designName) {
+        var existingDesign = existing[designName];
+        existingDesign.revTimestamp = existingDesign.revTimestamp || new Date().toISOString();
         return self.writeDir(path.join(self.srcDir, '_design', designName), existing[designName]);
       }));
     }).catch(function (err) {
-      console.trace('CouchDBVersionin: ERROR:', new Date(), err);
+      console.trace('CouchDBVersioning: ERROR:', new Date(), err);
     });
 };
 

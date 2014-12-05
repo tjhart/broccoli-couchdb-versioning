@@ -223,26 +223,31 @@ CouchDBVersioning.prototype.getExistingDesigns = function () {
   });
 };
 
-CouchDBVersioning.prototype.updateDocument = function (destDir, fileName) {
-  var self = this;
-  return readFile(destDir, fileName)
-    .then(function (json) {
-      if ('_design.json' === fileName) {
-        return self.getExistingDesigns()
-          .then(function (existing) {
-            return self.updateDesign(existing, json);
-          });
-      }
-    });
+CouchDBVersioning.prototype.updateDocument = function (destDir, fileName, existingDesigns) {
+  var self = this, result;
+
+  if ('_design.json' === fileName) {
+    result = readFile(destDir, fileName)
+      .then(function (json) {
+        return self.updateDesign(existingDesigns, json);
+      });
+  } else {
+    result = RSVP.resolve();
+  }
+  return result;
 };
 
 CouchDBVersioning.prototype.updateCouch = function (destDir) {
   var self = this;
-  return getFiles(destDir)
-    .then(function (files) {
-      return RSVP.all(files.map(function (fileName) {
-        return self.updateDocument(destDir, fileName);
-      }));
+  return this.getExistingDesigns()
+    .then(function (existing) {
+      return RSVP.hash({existingDesigns: existing, files: getFiles(destDir)})
+        .then(function (hash) {
+          var files = hash.files, existingDesigns = hash.existingDesigns;
+          return RSVP.all(files.map(function (fileName) {
+            return self.updateDocument(destDir, fileName, existingDesigns);
+          }));
+        });
     });
 };
 

@@ -15,7 +15,7 @@
     "broccoli-plugin",
     "couchdb"
   ],
-  "author": "Tim Hart",
+  "author": "Tim Hart <tjhart@icloud.com> (http://www.github.com/tjhart)",
   "license": "MIT",
   "dependencies": {
     "broccoli-tree-to-json": "^0.1.0",

@@ -124,8 +124,8 @@ function readFile(dir, file) {
   });
 }
 
-function reportError(docName, date, localRev, serverRev, nag) {
-  console.log(nag ? 'NAG:' : 'ERROR:', date, docName + '._rev Conflict: local is', localRev, 'server is', serverRev);
+function reportError(docName, date, localRev, serverRev) {
+  console.log('ERROR:', date, docName + '._rev Conflict: local is', localRev, 'server is', serverRev);
 }
 
 /**

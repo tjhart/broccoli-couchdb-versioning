@@ -12,6 +12,7 @@
   },
   "keywords": [
     "broccoli",
+    "broccoli-plugin",
     "couchdb"
   ],
   "author": "Tim Hart",

@@ -22,6 +22,7 @@ module.exports = couchdBVersioning('couchdb', {
   initDesign:true
 });
 ```
+
 * `couchdb` is the path to where your couchdb assets are, or should be stored
 * `url` is the url to your database
 * `username` is an admin usename with view read and update rights
@@ -31,7 +32,7 @@ the existing contents of the CouchDB database to your file system on startup. **
 once. I recommend you use this setting, execute `broccoli build dist`, and then remove it
 
 Once you have captured your CouchDB Design documents, you can keep `broccoli serve` running during
-a development session. Once you update a file, it's associated design document will get updated automatically 
+a development session. When you update a file, it's associated design document will get updated automatically 
 
 ## Things to consider
 * Synchronization is only one way - from the file system to the server. This tool assumes

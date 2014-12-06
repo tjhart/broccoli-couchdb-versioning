@@ -17,7 +17,7 @@
   "author": "Tim Hart",
   "license": "MIT",
   "dependencies": {
-    "broccoli-tree-to-json": "git+https://github.com/tjhart/broccoli-tree-to-json.git",
+    "broccoli-tree-to-json": "^0.1.0",
     "lodash": "^2.4.1",
     "mkdirp": "^0.5.0",
     "mktemp": "^0.3.5",

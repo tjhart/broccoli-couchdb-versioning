@@ -33,10 +33,6 @@ once. I recommend you use this setting, execute `broccoli build dist`, and then 
 Once you have captured your CouchDB Design documents, you can keep `broccoli serve` running during
 a development session. Once you update a file, it's associated design document will get updated automatically 
 
-## TODO
-* Handle design doc deletes
-* Manage other documents besides design documents
-
 ## Things to consider
 * Synchronization is only one way - from the file system to the server. This tool assumes
 that the file system is always the expert. 
@@ -53,10 +49,8 @@ Check out
 [broccoli-couchdb-versioning](https://github.com/tjhart/broccoli-couchdb-versioning).
 
 ## TODO
-
 * Determine when a document has been deleted, and remove it from the other store
 * Synchronize other documents too, not just design documents
-* Improve versioning. We're not quite ready for prime time.
 
 ## License
 

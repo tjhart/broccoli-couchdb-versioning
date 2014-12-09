@@ -1,6 +1,6 @@
 {
   "name": "broccoli-couchdb-versioning",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Define couchdb design documents on the file system, and automatically push them to couchdb when they change",
   "main": "index.js",
   "repository": {
@@ -19,6 +19,7 @@
   "license": "MIT",
   "dependencies": {
     "broccoli-tree-to-json": "^0.1.1",
+    "broccoli-tree-traverser": "^0.1.1",
     "lodash": "^2.4.1",
     "mkdirp": "^0.5.0",
     "mktemp": "^0.3.5",

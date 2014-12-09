@@ -7,7 +7,8 @@ var Tree2Json = require('broccoli-tree-to-json'),
   nano = require('nano'),
   lodash = require('lodash'),
   mktemp = require('mktemp'),
-  mkdirp = require('mkdirp');
+  mkdirp = require('mkdirp'),
+  Traverser = require('broccoli-tree-traverser');
 
 /**
  *
@@ -28,9 +29,10 @@ function CouchDBVersioning(inputTree, options) {
   if (!(this instanceof CouchDBVersioning)) return new CouchDBVersioning(inputTree, options);
 
   this.srcDir = inputTree;
-  this.timestampDir = inputTree + '/.revTimestamps';
+  this.timestampDir = path.join(inputTree, '.revTimestamps');
   this.options = options;
-  this.inputTree = new Tree2Json(inputTree + '/_design');
+  this.designTree = new Tree2Json(path.join(inputTree, '_design'));
+  this.docTree = new Traverser(path.join(inputTree, 'docs'), this);
 
   this.initPromise = this.init(options)
     .catch(function (err) {
@@ -151,6 +153,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesig
     if (!(existingRevTimestamp && lodash.isEqual(designDoc, existing))) {
       existing.revTimestamp = existingRevTimestamp;
       existing._rev = existingRev;
+      //REDTAG:TJH - I should use either the design name, or a subdir, to avoid conflicts with documents
       return self.getRevTimestamp(designKey)
         .then(function (revTimestamp) {
           var docName, result = null;
@@ -169,6 +172,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesig
                 }
               });
             }).then(function () {
+                //REDTAG:TJH - I should use either the design name, or a subdir, to avoid conflicts with documents
                 self.updateRevTimestamp(designKey, updateTime);
               });
           } else {
@@ -185,7 +189,13 @@ CouchDBVersioning.prototype.getRevTimestamp = function (key) {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
     fs.readFile(path.join(self.timestampDir, key + '.txt'), function (err, data) {
-      if (err) reject(err);
+      if (err) {
+        if (err.errno === 34) {
+          resolve(null);
+        } else {
+          reject(err)
+        }
+      }
       else resolve(data.toString());
     });
   });
@@ -236,7 +246,7 @@ CouchDBVersioning.prototype.updateDocument = function (destDir, fileName, existi
   return result;
 };
 
-CouchDBVersioning.prototype.updateCouch = function (destDir) {
+CouchDBVersioning.prototype.updateDesigns = function (destDir) {
   var self = this;
   return this.getExistingDesigns()
     .then(function (existing) {
@@ -252,11 +262,19 @@ CouchDBVersioning.prototype.updateCouch = function (destDir) {
 
 CouchDBVersioning.prototype.read = function (readTree) {
   var self = this;
+  this.docFiles = [];
   return this.initPromise
     .then(function () {
-      return RSVP.hash({connection: self.initConnection(), docs: readTree(self.inputTree)});
+      return RSVP.hash({
+        connection: self.initConnection(),
+        design: readTree(self.designTree)
+      });
     }).then(function (hash) {
-      return self.updateCouch(hash.docs);
+      console.log('updating design documents');
+      return RSVP.all([self.updateDesigns(hash.design), readTree(self.docTree)]);
+    }).then(function () {
+      console.log('updating other documents');
+      return self.updateDocs();
     }).then(function () {
       return self.tempDir;
     }).catch(function (err) {
@@ -265,8 +283,166 @@ CouchDBVersioning.prototype.read = function (readTree) {
     });
 };
 
+CouchDBVersioning.prototype.visit = function (filePath) {
+  this.docFiles.push(filePath);
+};
+
+var BATCH_SIZE = 5000;
+CouchDBVersioning.prototype.updateDocs = function () {
+  var self = this, batches = [], i, deferred = RSVP.defer(), promise;
+
+  for (i = 0; i < Math.ceil(this.docFiles.length / BATCH_SIZE); i++) {
+    batches.push(this.docFiles.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE));
+  }
+
+  console.log('Processing', this.docFiles.length, 'files in', batches.length, 'batches');
+
+  batches.forEach(function (batch, i) {
+    promise = RSVP.resolve(promise).then(function () {
+      return self.updateDocBatch(batch, i);
+    });
+  });
+
+  promise.then(function () {
+    deferred.resolve();
+  });
+
+  return deferred.promise;
+};
+
+CouchDBVersioning.prototype._fetchDocsFromBatch = function (batch) {
+  var self = this, keys = batch.map(function (batchFile) {
+    return path.basename(batchFile, '.json');
+  });
+
+  return new RSVP.Promise(function (resolve, reject) {
+    self.connection.fetch({keys: keys}, {include_docs: true}, function (err, docs) {
+      if (err) {reject(err);}
+      else { resolve(docs);}
+    });
+  });
+};
+
+CouchDBVersioning.prototype._createBatchUpdateTmp = function () {
+  return new RSVP.Promise(function (resolve, reject) {
+    mktemp.createFile(path.join(process.env.TMPDIR, 'couchdb-versioning-XXXXXXXX.tmp'), function (err, filePath) {
+      if (err) {reject(err);}
+      else {
+        resolve(filePath);
+      }
+    });
+  });
+};
+
+CouchDBVersioning.prototype._updateRecordFromBatch = function (localDoc, existingDoc, timestamp) {
+  existingDoc = existingDoc || {};
+  var self = this;
+  var existingTimestamp = existingDoc.revTimestamp, existingRev = existingDoc._rev;
+
+  delete existingDoc.revTimestamp;
+  delete existingDoc._rev;
+
+  if (!(existingTimestamp && lodash.isEqual(localDoc, existingDoc))) {
+    return this.getRevTimestamp(localDoc._id)
+      .then(function (localTimestamp) {
+        localDoc.revTimestamp = localTimestamp || timestamp;
+        if (!existingTimestamp ||
+          (existingDoc.error === 'not_found') ||
+          (localDoc.revTimestamp > existingTimestamp)) {
+          localDoc._rev = existingRev;
+          localDoc.revTimestamp = timestamp;
+
+          return self.updateRevTimestamp(localDoc._id, localDoc.revTimestamp)
+            .then(function () {
+              return JSON.stringify(localDoc)
+            });
+        }
+      });
+  } else {
+    return RSVP.resolve(null);
+  }
+};
+
+CouchDBVersioning.prototype._loadUpdateFileFromBatch = function (batch, existingDocs, tmpFilePath) {
+  var self = this, writeStream = fs.createWriteStream(tmpFilePath), now = new Date().toISOString(), addedRecord = false;
+  writeStream.write('{"docs":[');
+  return RSVP.all(batch.map(function (batchFile, i) {
+    return new RSVP.Promise(function (resolve, reject) {
+      fs.readFile(batchFile, function (err, data) {
+        if (err) {reject(err);}
+        else {
+          var localDoc = JSON.parse(data.toString()), existingDoc = existingDocs.rows[i].doc;
+          localDoc._id = path.basename(batchFile, '.json');
+          self._updateRecordFromBatch(localDoc, existingDoc, now)
+            .then(function (record) {
+              if (record) {
+                if (addedRecord) {
+                  writeStream.write(', ');
+                }
+                writeStream.write(record);
+                addedRecord = true;
+              }
+              resolve();
+            });
+        }
+      });
+    });
+  })).then(function () {
+    return new RSVP.Promise(function (resolve, reject) {
+      writeStream.end(']}', function (err) {
+        if (err) {reject(err);}
+        else {resolve();}
+      });
+    });
+  }).then(function () {
+    return addedRecord;
+  });
+};
+
+CouchDBVersioning.prototype._bulkUpdateDocs = function (filePath) {
+  var self = this;
+  return new RSVP.Promise(function (resolve, reject) {
+    fs.createReadStream(filePath)
+      .pipe(self.connection.bulk())
+      .on('end', function () {
+        resolve();
+      }).on('error', function (err) {
+        console.trace('CouchDBVersioning ERROR:', err);
+        reject(err);
+      });
+  });
+};
+
+CouchDBVersioning.prototype.updateDocBatch = function (batch, batchNum) {
+  var self = this, tmpFilePath;
+  nano.debug = true;
+  return RSVP.hash({
+    existingDocs: self._fetchDocsFromBatch(batch),
+    tmpFile: self._createBatchUpdateTmp()
+  }).then(function (hash) {
+    tmpFilePath = hash.tmpFile;
+    console.log('Preparing batch', batchNum + 1);
+    return self._loadUpdateFileFromBatch(batch, hash.existingDocs, hash.tmpFile);
+  }).then(function (hasRecords) {
+    if (hasRecords) {
+      console.log('Pushing batch', batchNum + 1, 'to', self.options.url);
+      return self._bulkUpdateDocs(tmpFilePath);
+    } else {
+      console.log('Nothing changed in batch', batchNum + 1, '. Skipping');
+    }
+  }).then(function () {
+    console.log('Batch', batchNum + 1, 'complete');
+    return new RSVP.Promise(function (resolve, reject) {
+      fs.unlink(tmpFilePath, function (err) {
+        if (err) {reject(err);}
+        else {resolve();}
+      })
+    });
+  });
+};
+
 CouchDBVersioning.prototype.cleanup = function () {
-  this.inputTree.cleanup();
+  this.designTree.cleanup();
   if (this.tempDir) fs.rmdirSync(this.tempDir);
 };
 

@@ -11,6 +11,58 @@ npm install --save broccoli-couchdb-versioning
 
 ## Getting Started
 
+The input tree is expected to have the following structure:
+
+```
+couchdb
+|--- _design
+|--- docs
+```
+
+The `_design` directory keeps your design documents, and the `docs` directory keeps any lookup data
+you want in your database.
+
+To facilitate development, the contents of the `_design` directory is 'unrolled' JSON. A typical example:
+
+```
+_design
+|--- myDesignDocument
+|    |--- _rev.txt #<some rev value>
+|    |--- language.txt #javascript
+|    |--- views
+|    |    |--- someViewName
+|    |    |    |--- map.js #the map function for this view
+|    |    |    |--- reduce.js #the optional reduce for this view
+|--- myOtherDesignDocument
+|    |--- _rev.txt #<some rev value>
+|    |--- language.txt #javascript
+|    |--- views
+|    |    |--- someOtherViewName
+|    |    |    |--- map.js #the map function for this view
+```
+
+This makes it easier to develop and test specific map/reduce functions. CouchDBVersioning rolls this structure up into
+appropriately formatted design documents when updating CouchDB.
+ 
+ The 'docs' directory is expected to be flat - one file per CouchDB Document. Each file is expected to be valid JSON.
+ the file name will be the name of the document in CouchDB:
+ 
+ ```
+ docs
+ |--- myDoc.json #{"foo":"bar"}
+ ```
+ 
+ results in a CouchDB Document:
+ ```javascript
+ {
+    "foo":"bar",
+    "_id":"myDoc",
+    "_rev":"some revision string"
+ }
+ ```
+
+## Configuration
+
 ```javascript
 //Brocfile.js
 var couchDBVersioning = require('broccoli-couchdb-versioning');
@@ -19,7 +71,8 @@ module.exports = couchdBVersioning('couchdb', {
   url:'http://localhost:5984/db',
   username:admin_username,
   password:admin_password,
-  initDesign:true
+  initDesign:true, //optional. Useful for initial setup
+  manageDocs:true //optional. See documentation
 });
 ```
 
@@ -28,11 +81,39 @@ module.exports = couchdBVersioning('couchdb', {
 * `username` is an admin usename with view read and update rights
 * `password` is their password
 * `initDesign` should be set to `true` if you want to have `broccoli-couchdb-versioning` load
-the existing contents of the CouchDB database to your file system on startup. **NOTE** only do this
-once. I recommend you use this setting, execute `broccoli build dist`, and then remove it
+the existing CouchDB design documents database to your file system on startup. **NOTE** only do this
+once. Optional. Defaults to false. 
+* `manageDocs` whether or not the `docs` directory should be monitored. Optional. Defaults to true. 
+
+`initDesign` is useful to capture existing design documents. Set the option to true, execute `broccoli build dist`, and 
+then remove it. Leaving this value set could result local changes being over-ridden when CouchDB Versioning starts.
+
+`manageDocs` is useful when you have a large set of 
+static documents. Setting `manageDocs` to `false` will speed up builds when you're actively developing views.
+
+You can also define your configuration dynamically. One example:
+
+```javascript
+//Brocfile.js
+var couchDBVersioning = require('broccoli-couchdb-versioning');
+
+// was broccoli executed as 'broccoli build ...'?
+var isBuild = process.argv.indexOf('build') > -1;
+
+module.exports = couchdBVersioning('couchdb', {
+  url:'http://localhost:5984/db',
+  username:admin_username,
+  password:admin_password,
+  manageDocs:isBuild //only manage documents during builds, not 'broccoli serve'
+});
+
+```
+
+In this configuration, the developer can use `broccoli serve` in cases where
+design docs are under development, but static docs are stable. `broccoli build` will still manage static documents 
 
 Once you have captured your CouchDB Design documents, you can keep `broccoli serve` running during
-a development session. When you update a file, it's associated design document will get updated automatically 
+a development session. When you update a file, it's associated design document will get updated automatically. 
 
 ## Things to consider
 * Synchronization is only one way - from the file system to the server. This tool assumes
@@ -51,7 +132,6 @@ Check out
 
 ## TODO
 * Determine when a document has been deleted, and remove it from the other store
-* Synchronize other documents too, not just design documents
 
 ## License
 

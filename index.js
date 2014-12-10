@@ -14,7 +14,8 @@ var Tree2Json = require('broccoli-tree-to-json'),
 var DEFAULT_OPTIONS = {
   initDesign: false,
   manageDocs: true
-};
+},
+  PREFIX = 'CouchDB Versioning:';
 
 /**
  *
@@ -45,7 +46,7 @@ function CouchDBVersioning(inputTree, options) {
 
   this.initPromise = this.init(options)
     .catch(function (err) {
-      console.trace('CouchDB Init ERROR:', new Date(), err);
+      console.trace(PREFIX, 'Init ERROR:', err);
     });
 }
 
@@ -55,7 +56,7 @@ CouchDBVersioning.prototype.init = function (options) {
     this.initTimestampCache()
   ])
     .catch(function (err) {
-      console.log('CouchDB Versioning initialization error:', err);
+      console.log(PREFIX, 'Init ERROR:', err);
     });
 };
 
@@ -96,7 +97,7 @@ CouchDBVersioning.prototype.initTmpDir = function () {
   return new RSVP.Promise(function (resolve, reject) {
     mktemp.createDir(path.join(process.env.TMPDIR, 'XXXXXXXX.tmp'), function (err, path) {
       if (err) {
-        console.warn('CouchDBVersioning WARN:', new Date(), 'Could not create temp dir');
+        console.warn(PREFIX, 'WARN: Could not create temp dir');
         resolve();
       }
       else {
@@ -136,7 +137,7 @@ function readFile(dir, file) {
 }
 
 function reportError(docName, date, localRev, serverRev) {
-  console.log('ERROR:', date, docName + '._rev Conflict: local is', localRev, 'server is', serverRev);
+  console.log(PREFIX, 'ERROR:', date, docName + '._rev Conflict: local is', localRev, 'server is', serverRev);
 }
 
 /**
@@ -172,7 +173,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesig
 
           if (!existingRevTimestamp || revTimestamp >= existingRevTimestamp) {
             result = new RSVP.Promise(function (resolve, reject) {
-              console.log('Updating', designName);
+              console.log(PREFIX, 'Updating', designName);
               designDoc.revTimestamp = updateTime;
               designDoc._rev = existing._rev;
               self.connection.insert(designDoc, designName, function (err, body) {
@@ -192,7 +193,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesig
           return result;
         });
     } else {
-      console.log('Skipping', designName, '. No changes detected');
+      console.log(PREFIX, 'Skipping', designName, '. No changes detected');
     }
   }));
 };
@@ -220,7 +221,7 @@ CouchDBVersioning.prototype.updateRevTimestamp = function (key, rev) {
     fs.writeFile(filePath, rev, function (err, data) {
       if (err) {
         //NOTE:TJH Some deploys won't update the timestamp (read only dirs), so this shouldn't be fatal
-        console.warn('CouchDBVersioning WARN:', new Date(), 'could not update', filePath, '. :', err);
+        console.warn(PREFIX, 'WARN: Could not update', filePath, '. :', err);
       }
       resolve();
     });
@@ -282,7 +283,7 @@ CouchDBVersioning.prototype.read = function (readTree) {
         design: readTree(self.designTree)
       });
     }).then(function (hash) {
-      console.log('updating design documents');
+      console.log(PREFIX, 'Updating design documents');
       var promises = [self.updateDesigns(hash.design)];
       if (self.options.manageDocs) {
         promises.push(readTree(self.docTree));
@@ -290,13 +291,13 @@ CouchDBVersioning.prototype.read = function (readTree) {
       return RSVP.all(promises);
     }).then(function () {
       if (self.options.manageDocs) {
-        console.log('updating other documents');
+        console.log(PREFIX, 'Updating other documents');
       }
       return self.updateDocs();
     }).then(function () {
       return self.tempDir;
     }).catch(function (err) {
-      console.trace('CouchDBVersioning: ERROR:', new Date(), err);
+      console.trace(PREFIX, 'ERROR:', new Date(), err);
       return self.tempDir;
     });
 };
@@ -321,7 +322,7 @@ CouchDBVersioning.prototype.updateDocs = function () {
   }
 
   if (this.docFiles.length) {
-    console.log('Processing', this.docFiles.length, 'files in', batches.length, 'batches');
+    console.log(PREFIX, 'Processing', this.docFiles.length, 'files in', batches.length, 'batches');
   }
 
   batches.forEach(function (batch, i) {
@@ -430,7 +431,7 @@ CouchDBVersioning.prototype._bulkUpdateDocs = function (filePath) {
       .on('end', function () {
         resolve();
       }).on('error', function (err) {
-        console.trace('CouchDBVersioning ERROR:', err);
+        console.trace(PREFIX, 'ERROR:', err);
         reject(err);
       });
   });
@@ -444,17 +445,17 @@ CouchDBVersioning.prototype.updateDocBatch = function (batch, batchNum) {
     tmpFile: self._createBatchUpdateTmp()
   }).then(function (hash) {
     tmpFilePath = hash.tmpFile;
-    console.log('Preparing batch', batchNum + 1);
+    console.log(PREFIX, 'Preparing batch', batchNum + 1);
     return self._loadUpdateFileFromBatch(batch, hash.existingDocs, hash.tmpFile);
   }).then(function (hasRecords) {
     if (hasRecords) {
-      console.log('Pushing batch', batchNum + 1, 'to', self.options.url);
+      console.log(PREFIX, 'Pushing batch', batchNum + 1, 'to', self.options.url);
       return self._bulkUpdateDocs(tmpFilePath);
     } else {
-      console.log('Nothing changed in batch', batchNum + 1, '. Skipping');
+      console.log(PREFIX, 'Nothing changed in batch', batchNum + 1, '. Skipping');
     }
   }).then(function () {
-    console.log('Batch', batchNum + 1, 'complete');
+    console.log(PREFIX, 'Batch', batchNum + 1, 'complete');
     return new RSVP.Promise(function (resolve, reject) {
       fs.unlink(tmpFilePath, function (err) {
         if (err) {reject(err);}
@@ -524,7 +525,7 @@ CouchDBVersioning.prototype.initExistingDesigns = function () {
         return self.writeDir(path.join(self.srcDir, '_design', designName), existing[designName]);
       }));
     }).catch(function (err) {
-      console.trace('CouchDBVersioning: ERROR:', new Date(), err);
+      console.trace(PREFIX, 'ERROR:', new Date(), err);
     });
 };
 

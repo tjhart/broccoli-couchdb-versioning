@@ -10,6 +10,12 @@ var Tree2Json = require('broccoli-tree-to-json'),
   mkdirp = require('mkdirp'),
   Traverser = require('broccoli-tree-traverser');
 
+
+var DEFAULT_OPTIONS = {
+  initDesign: false,
+  manageDocs: true
+};
+
 /**
  *
  * Synchronize CouchDB design documents.
@@ -17,7 +23,9 @@ var Tree2Json = require('broccoli-tree-to-json'),
  *  * `url`: the couchdb url (http://host:123/db)
  *  * `username`: optional. used to authenticate with couchdb
  *  * `password`: required if username is present.
- *  * `initDesign`:optional. Set to true if the directory structure should be created from the existing database design documents
+ *  * `initDesign`:optional. Set to true if the directory structure should be created from the existing database design
+ *      documents. Defaults to false.
+ *  * `manageDocs` Whether or not the docs tree should be managed during this run. Optional. Defaults to true.
  *
  * @param inputTree {string|tree} the input tree to monitor
  * @param options {Object} couchdb connection options
@@ -28,6 +36,7 @@ var Tree2Json = require('broccoli-tree-to-json'),
 function CouchDBVersioning(inputTree, options) {
   if (!(this instanceof CouchDBVersioning)) return new CouchDBVersioning(inputTree, options);
 
+  options = lodash.merge(JSON.parse(JSON.stringify(DEFAULT_OPTIONS)), options);
   this.srcDir = inputTree;
   this.timestampDir = path.join(inputTree, '.revTimestamps');
   this.options = options;
@@ -163,6 +172,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesig
 
           if (!existingRevTimestamp || revTimestamp >= existingRevTimestamp) {
             result = new RSVP.Promise(function (resolve, reject) {
+              console.log('Updating', designName);
               designDoc.revTimestamp = updateTime;
               designDoc._rev = existing._rev;
               self.connection.insert(designDoc, designName, function (err, body) {
@@ -181,6 +191,8 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesig
           }
           return result;
         });
+    } else {
+      console.log('Skipping', designName, '. No changes detected');
     }
   }));
 };
@@ -271,9 +283,15 @@ CouchDBVersioning.prototype.read = function (readTree) {
       });
     }).then(function (hash) {
       console.log('updating design documents');
-      return RSVP.all([self.updateDesigns(hash.design), readTree(self.docTree)]);
+      var promises = [self.updateDesigns(hash.design)];
+      if (self.options.manageDocs) {
+        promises.push(readTree(self.docTree));
+      }
+      return RSVP.all(promises);
     }).then(function () {
-      console.log('updating other documents');
+      if (self.options.manageDocs) {
+        console.log('updating other documents');
+      }
       return self.updateDocs();
     }).then(function () {
       return self.tempDir;
@@ -287,9 +305,16 @@ CouchDBVersioning.prototype.visit = function (filePath) {
   this.docFiles.push(filePath);
 };
 
+/**
+ * BATCH_SIZE is bound by the number of open files a platform allows.
+ * On OS X, for example, no more than 10,240 files can be open by any process.
+ * Since each doc file also produces a revStamp file, we can easily have
+ * 2 * BATCH_SIZE files open at one time.
+ *
+ */
 var BATCH_SIZE = 5000;
 CouchDBVersioning.prototype.updateDocs = function () {
-  var self = this, batches = [], i, deferred = RSVP.defer(), promise;
+  var self = this, batches = [], i, promise = RSVP.resolve(null);
 
   for (i = 0; i < Math.ceil(this.docFiles.length / BATCH_SIZE); i++) {
     batches.push(this.docFiles.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE));
@@ -298,16 +323,12 @@ CouchDBVersioning.prototype.updateDocs = function () {
   console.log('Processing', this.docFiles.length, 'files in', batches.length, 'batches');
 
   batches.forEach(function (batch, i) {
-    promise = RSVP.resolve(promise).then(function () {
+    promise = promise.then(function () {
       return self.updateDocBatch(batch, i);
     });
   });
 
-  promise.then(function () {
-    deferred.resolve();
-  });
-
-  return deferred.promise;
+  return promise;
 };
 
 CouchDBVersioning.prototype._fetchDocsFromBatch = function (batch) {

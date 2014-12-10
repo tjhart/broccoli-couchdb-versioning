@@ -12,9 +12,9 @@ var Tree2Json = require('broccoli-tree-to-json'),
 
 
 var DEFAULT_OPTIONS = {
-  initDesign: false,
-  manageDocs: true
-},
+    initDesign: false,
+    manageDocs: true
+  },
   PREFIX = 'CouchDB Versioning:';
 
 /**
@@ -184,7 +184,7 @@ CouchDBVersioning.prototype.updateDesign = function (existingDesigns, localDesig
               });
             }).then(function () {
                 //REDTAG:TJH - I should use either the design name, or a subdir, to avoid conflicts with documents
-                self.updateRevTimestamp(designKey, updateTime);
+                return self.updateRevTimestamp(designKey, updateTime);
               });
           } else {
             docName = '_design/' + designKey;
@@ -246,30 +246,42 @@ CouchDBVersioning.prototype.getExistingDesigns = function () {
 };
 
 CouchDBVersioning.prototype.updateDocument = function (destDir, fileName, existingDesigns) {
-  var self = this, result;
+  var self = this;
 
-  if ('_design.json' === fileName) {
-    result = readFile(destDir, fileName)
-      .then(function (json) {
-        return self.updateDesign(existingDesigns, json);
-      });
-  } else {
-    result = RSVP.resolve();
-  }
-  return result;
+  return readFile(destDir, fileName)
+    .then(function (json) {
+      return self.updateDesign(existingDesigns, json);
+    });
 };
 
 CouchDBVersioning.prototype.updateDesigns = function (destDir) {
   var self = this;
+  return RSVP.hash({existingDesigns: this.getExistingDesigns(), files: getFiles(destDir)})
+    .then(function (hash) {
+      var files = hash.files, existingDesigns = hash.existingDesigns;
+      return RSVP.all(files.map(function (fileName) {
+        return self.updateDocument(destDir, fileName, existingDesigns);
+      }));
+    });
+};
+
+CouchDBVersioning.prototype.rebuildIndexes = function () {
+  var self = this;
   return this.getExistingDesigns()
-    .then(function (existing) {
-      return RSVP.hash({existingDesigns: existing, files: getFiles(destDir)})
-        .then(function (hash) {
-          var files = hash.files, existingDesigns = hash.existingDesigns;
-          return RSVP.all(files.map(function (fileName) {
-            return self.updateDocument(destDir, fileName, existingDesigns);
-          }));
+    .then(function (existingDesigns) {
+      return RSVP.all(Object.keys(existingDesigns).map(function (designKey) {
+        return new RSVP.Promise(function (resolve, reject) {
+          var designDoc = existingDesigns[designKey];
+          console.log(PREFIX, 'Rebuilding', designKey, 'views');
+          self.connection.view(designKey, Object.keys(designDoc.views)[0], {limit:1}, function (err) {
+            if (err) reject(err);
+            else {
+              console.log(PREFIX, designKey, 'view rebuilding complete');
+              resolve();
+            }
+          });
         });
+      }));
     });
 };
 
@@ -294,6 +306,9 @@ CouchDBVersioning.prototype.read = function (readTree) {
         console.log(PREFIX, 'Updating other documents');
       }
       return self.updateDocs();
+    }).then(function () {
+      console.log(PREFIX, 'Rebuilding indexes');
+      return self.rebuildIndexes();
     }).then(function () {
       return self.tempDir;
     }).catch(function (err) {

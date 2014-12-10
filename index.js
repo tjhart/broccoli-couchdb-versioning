@@ -348,7 +348,7 @@ CouchDBVersioning.prototype._updateRecordFromBatch = function (localDoc, existin
         localDoc.revTimestamp = localTimestamp || timestamp;
         if (!existingTimestamp ||
           (existingDoc.error === 'not_found') ||
-          (localDoc.revTimestamp > existingTimestamp)) {
+          (localDoc.revTimestamp >= existingTimestamp)) {
           localDoc._rev = existingRev;
           localDoc.revTimestamp = timestamp;
 

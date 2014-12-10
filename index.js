@@ -320,7 +320,9 @@ CouchDBVersioning.prototype.updateDocs = function () {
     batches.push(this.docFiles.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE));
   }
 
-  console.log('Processing', this.docFiles.length, 'files in', batches.length, 'batches');
+  if (this.docFiles.length) {
+    console.log('Processing', this.docFiles.length, 'files in', batches.length, 'batches');
+  }
 
   batches.forEach(function (batch, i) {
     promise = promise.then(function () {

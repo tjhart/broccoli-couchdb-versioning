@@ -1,7 +1,7 @@
 # Broccoli CouchDB Versioning
 
-A simple tool for defining CouchDB Design documents with files, and using Broccoli to 
-keep them in sync with the database
+A [Broccoli](https://github.com/broccolijs/broccoli) plugin for defining CouchDB Design documents with files, and using 
+Broccoli to keep them in sync with the database
 
 ## Installation
 

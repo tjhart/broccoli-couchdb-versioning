@@ -17,6 +17,10 @@ var DEFAULT_OPTIONS = {
   },
   PREFIX = 'CouchDB Versioning:';
 
+
+function getTmpDir() {
+  return process.env.TMPDIR || process.env.TMP;
+}
 /**
  *
  * Synchronize CouchDB design documents.
@@ -95,7 +99,7 @@ CouchDBVersioning.prototype.initConnection = function () {
 CouchDBVersioning.prototype.initTmpDir = function () {
   var self = this;
   return new RSVP.Promise(function (resolve, reject) {
-    mktemp.createDir(path.join(process.env.TMPDIR, 'XXXXXXXX.tmp'), function (err, path) {
+    mktemp.createDir(path.join(getTmpDir(), 'XXXXXXXX.tmp'), function (err, path) {
       if (err) {
         console.warn(PREFIX, 'WARN: Could not create temp dir');
         resolve();
@@ -273,7 +277,7 @@ CouchDBVersioning.prototype.rebuildIndexes = function () {
         return new RSVP.Promise(function (resolve, reject) {
           var designDoc = existingDesigns[designKey];
           console.log(PREFIX, 'Rebuilding', designKey, 'views');
-          self.connection.view(designKey, Object.keys(designDoc.views)[0], {limit:1}, function (err) {
+          self.connection.view(designKey, Object.keys(designDoc.views)[0], {limit: 1}, function (err) {
             if (err) reject(err);
             else {
               console.log(PREFIX, designKey, 'view rebuilding complete');
@@ -364,7 +368,7 @@ CouchDBVersioning.prototype._fetchDocsFromBatch = function (batch) {
 
 CouchDBVersioning.prototype._createBatchUpdateTmp = function () {
   return new RSVP.Promise(function (resolve, reject) {
-    mktemp.createFile(path.join(process.env.TMPDIR, 'couchdb-versioning-XXXXXXXX.tmp'), function (err, filePath) {
+    mktemp.createFile(path.join(getTmpDir(), 'couchdb-versioning-XXXXXXXX.tmp'), function (err, filePath) {
       if (err) {reject(err);}
       else {
         resolve(filePath);
@@ -509,9 +513,13 @@ CouchDBVersioning.prototype.writeDir = function (filePath, json) {
   });
 };
 
-var JS_PATH = new RegExp(path.sep + '((map)|(reduce))$');
-var SPECIAL_VALUES = new RegExp(path.sep + 'revTimestamp$');
-var IGNORED_VALUES = new RegExp(path.sep + '_id$');
+function escape(string) {
+  return string.replace(/([-()\[\]{}+?*.$\^|,:#<!\\])/g, '\\$1');
+}
+
+var JS_PATH = new RegExp(escape(path.sep + '((map)|(reduce))$'));
+var SPECIAL_VALUES = new RegExp(escape(path.sep + 'revTimestamp$'));
+var IGNORED_VALUES = new RegExp(escape(path.sep + '_id$'));
 CouchDBVersioning.prototype.writeFile = function (filePath, data) {
   var elems;
   if (IGNORED_VALUES.test(filePath)) return false;

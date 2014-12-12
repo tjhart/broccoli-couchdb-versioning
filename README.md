@@ -30,15 +30,15 @@ _design
 |    |--- _rev.txt #<some rev value>
 |    |--- language.txt #javascript
 |    |--- views
-|    |    |--- someViewName
-|    |    |    |--- map.js #the map function for this view
-|    |    |    |--- reduce.js #the optional reduce for this view
+|         |--- someViewName
+|              |--- map.js #the map function for this view
+|              |--- reduce.js #the optional reduce for this view
 |--- myOtherDesignDocument
-|    |--- _rev.txt #<some rev value>
-|    |--- language.txt #javascript
-|    |--- views
-|    |    |--- someOtherViewName
-|    |    |    |--- map.js #the map function for this view
+     |--- _rev.txt #<some rev value>
+     |--- language.txt #javascript
+     |--- views
+          |--- someOtherViewName
+               |--- map.js #the map function for this view
 ```
 
 This makes it easier to develop and test specific map/reduce functions. CouchDBVersioning rolls this structure up into

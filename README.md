@@ -16,7 +16,7 @@ The input tree is expected to have the following structure:
 ```
 couchdb
 |--- _design
-|--- docs
++--- docs
 ```
 
 The `_design` directory keeps your design documents, and the `docs` directory keeps any lookup data
@@ -29,16 +29,16 @@ _design
 |--- myDesignDocument
 |    |--- _rev.txt #<some rev value>
 |    |--- language.txt #javascript
-|    |--- views
-|         |--- someViewName
+|    +--- views
+|         +--- someViewName
 |              |--- map.js #the map function for this view
-|              |--- reduce.js #the optional reduce for this view
-|--- myOtherDesignDocument
+|              +--- reduce.js #the optional reduce for this view
++--- myOtherDesignDocument
      |--- _rev.txt #<some rev value>
      |--- language.txt #javascript
-     |--- views
-          |--- someOtherViewName
-               |--- map.js #the map function for this view
+     +--- views
+          +--- someOtherViewName
+               +--- map.js #the map function for this view
 ```
 
 This makes it easier to develop and test specific map/reduce functions. CouchDBVersioning rolls this structure up into
@@ -49,7 +49,7 @@ appropriately formatted design documents when updating CouchDB.
  
  ```
  docs
- |--- myDoc.json #{"foo":"bar"}
+ +--- myDoc.json #{"foo":"bar"}
  ```
  
  results in a CouchDB Document:

@@ -45,8 +45,6 @@ function CouchDBVersioning(inputTree, options) {
   this.srcDir = inputTree;
   this.timestampDir = path.join(inputTree, '.revTimestamps');
   this.options = options;
-  this.designTree = new Tree2Json(path.join(inputTree, '_design'));
-  this.docTree = new Traverser(path.join(inputTree, 'docs'), this);
 
   this.initPromise = this.init(options)
     .catch(function (err) {
@@ -54,12 +52,48 @@ function CouchDBVersioning(inputTree, options) {
     });
 }
 
+CouchDBVersioning.prototype.initTree = function (tree, cb) {
+  return new RSVP.Promise(function (resolve, reject) {
+    fs.lstat(tree, function (err, stats) {
+      if (stats && stats.isDirectory()) {
+        cb();
+      }
+      resolve();
+    });
+  });
+};
+
+CouchDBVersioning.prototype.initDesignTree = function (tree) {
+  var self = this;
+  return this.initTree(tree, function () { self.designTree = new Tree2Json(tree); });
+};
+
+CouchDBVersioning.prototype.initDocTree = function (tree) {
+  var self = this;
+  return this.initTree(tree, function () {self.docTree = new Traverser(tree, self);});
+};
+
+CouchDBVersioning.prototype.initSubtrees = function () {
+  var self = this;
+  return RSVP.all([this.initDesignTree(path.join(self.srcDir, '_design')),
+    this.initDocTree(path.join(self.srcDir, 'docs'))]);
+};
+
 CouchDBVersioning.prototype.init = function (options) {
-  return RSVP.all([this.initDesign(options),
-    this.initTmpDir() ,
-    this.initTimestampCache()
-  ])
-    .catch(function (err) {
+  var self = this;
+  return this.initDesign(options)
+    .then(function () {
+      return RSVP.all([self.initTmpDir() ,
+        self.initTimestampCache(),
+        self.initSubtrees()
+      ]);
+    }).then(function () {
+      if (!((self.docTree && options.manageDocs) || self.designTree)) {
+        console.error('You must configure either a "_design" subdirectory or a "docs" subdirectory and set ' +
+          '<manageDocs> option to true');
+        process.exit(1);
+      }
+    }).catch(function (err) {
       console.log(PREFIX, 'Init ERROR:', err);
     });
 };
@@ -296,17 +330,20 @@ CouchDBVersioning.prototype.read = function (readTree) {
     .then(function () {
       return RSVP.hash({
         connection: self.initConnection(),
-        design: readTree(self.designTree)
+        design: self.designTree ? readTree(self.designTree) : null
       });
     }).then(function (hash) {
-      console.log(PREFIX, 'Updating design documents');
-      var promises = [self.updateDesigns(hash.design)];
-      if (self.options.manageDocs) {
+      var promises = [];
+      if (self.designTree) {
+        console.log(PREFIX, 'Updating design documents');
+        promises.push(self.updateDesigns(hash.design));
+      }
+      if (self.options.manageDocs && self.docTree) {
         promises.push(readTree(self.docTree));
       }
       return RSVP.all(promises);
     }).then(function () {
-      if (self.options.manageDocs) {
+      if (self.options.manageDocs && self.docTree) {
         console.log(PREFIX, 'Updating other documents');
       }
       return self.updateDocs();
@@ -316,7 +353,7 @@ CouchDBVersioning.prototype.read = function (readTree) {
     }).then(function () {
       return self.tempDir;
     }).catch(function (err) {
-      console.trace(PREFIX, 'ERROR:', new Date(), err);
+      console.trace(PREFIX, 'ERROR:', err);
       return self.tempDir;
     });
 };
@@ -485,7 +522,8 @@ CouchDBVersioning.prototype.updateDocBatch = function (batch, batchNum) {
 };
 
 CouchDBVersioning.prototype.cleanup = function () {
-  this.designTree.cleanup();
+  if (this.designTree) this.designTree.cleanup();
+  if (this.docTree) this.docTree.cleanup();
   if (this.tempDir) fs.rmdirSync(this.tempDir);
 };
 
@@ -517,9 +555,9 @@ function escape(string) {
   return string.replace(/([-()\[\]{}+?*.$\^|,:#<!\\])/g, '\\$1');
 }
 
-var JS_PATH = new RegExp(escape(path.sep + '((map)|(reduce))$'));
-var SPECIAL_VALUES = new RegExp(escape(path.sep + 'revTimestamp$'));
-var IGNORED_VALUES = new RegExp(escape(path.sep + '_id$'));
+var JS_PATH = new RegExp(escape(path.sep) + '((map)|(reduce))$'),
+  SPECIAL_VALUES = new RegExp(escape(path.sep) + 'revTimestamp$'),
+  IGNORED_VALUES = new RegExp(escape(path.sep) + '_id$');
 CouchDBVersioning.prototype.writeFile = function (filePath, data) {
   var elems;
   if (IGNORED_VALUES.test(filePath)) return false;

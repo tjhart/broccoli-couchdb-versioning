@@ -16,7 +16,7 @@ The input tree is expected to have the following structure:
 ```
 couchdb
 |--- _design
-+--- docs
++--- docs #(optional)
 ```
 
 The `_design` directory keeps your design documents, and the `docs` directory keeps any lookup data
@@ -44,8 +44,8 @@ _design
 This makes it easier to develop and test specific map/reduce functions. CouchDBVersioning rolls this structure up into
 appropriately formatted design documents when updating CouchDB.
  
- The 'docs' directory is expected to be flat - one file per CouchDB Document. Each file is expected to be valid JSON.
- the file name will be the name of the document in CouchDB:
+ The `docs` directory is expected to be flat - one file per CouchDB Document. Each file is expected to be valid JSON.
+ The file name will be the name of the document in CouchDB:
  
  ```
  docs
@@ -88,8 +88,9 @@ once. Optional. Defaults to false.
 `initDesign` is useful to capture existing design documents. Set the option to true, execute `broccoli build dist`, and 
 then remove it. Leaving this value set could result local changes being over-ridden when CouchDB Versioning starts.
 
-`manageDocs` is useful when you have a large set of 
-static documents. Setting `manageDocs` to `false` will speed up builds when you're actively developing views.
+`manageDocs` is useful when you have static documents to manage. If set to `true`, then the `docs` subdirectory 
+must exist, and contain one or more JSON files. Setting `manageDocs` to `false` will speed up builds when you're 
+actively developing views.
 
 You can also define your configuration dynamically. One example:
 
@@ -131,7 +132,7 @@ Check out
 [broccoli-couchdb-versioning](https://github.com/tjhart/broccoli-couchdb-versioning).
 
 ## TODO
-* Determine when a document has been deleted, and remove it from the other store
+* Determine when a design document has been deleted, and remove it from the other store
 
 ## License
 
